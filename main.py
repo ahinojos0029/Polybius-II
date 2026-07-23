@@ -12,9 +12,17 @@ from ui import UIRenderer
 from entities import spawn_obstacle, spawn_powerup, spawn_fragment
 
 from game_state import (
-    GameState, STATE_WARNING, STATE_MAIN_MENU, STATE_CAMPAIGN_MENU,
-    STATE_OPTIONS, STATE_LEADERBOARD, STATE_PLAYING, STATE_TRANSITION,
-    STATE_GAMEOVER, STATE_ENTER_NAME, STATE_PAUSED
+    GameState,
+    STATE_WARNING,
+    STATE_MAIN_MENU,
+    STATE_CAMPAIGN_MENU,
+    STATE_OPTIONS,
+    STATE_LEADERBOARD,
+    STATE_PLAYING,
+    STATE_TRANSITION,
+    STATE_GAMEOVER,
+    STATE_ENTER_NAME,
+    STATE_PAUSED,
 )
 from events import handle_events
 from render import render_frame
@@ -47,14 +55,34 @@ while g.running:
 
     # Discord RPC Sync
     if g.frame_count % 60 == 0:
-        if g.current_state in (STATE_WARNING, STATE_MAIN_MENU, STATE_CAMPAIGN_MENU, STATE_OPTIONS, STATE_LEADERBOARD):
-            discord.update(settings["discord_rpc_enabled"], "In Arcade Cabinet", "Main Menu")
+        if g.current_state in (
+            STATE_WARNING,
+            STATE_MAIN_MENU,
+            STATE_CAMPAIGN_MENU,
+            STATE_OPTIONS,
+            STATE_LEADERBOARD,
+        ):
+            discord.update(
+                settings["discord_rpc_enabled"], "In Arcade Cabinet", "Main Menu"
+            )
         elif g.current_state in (STATE_PLAYING, STATE_TRANSITION):
-            discord.update(settings["discord_rpc_enabled"], f"Stage {g.level} | Score: {g.score:06d}", f"Stress: {g.multiplier}X")
+            discord.update(
+                settings["discord_rpc_enabled"],
+                f"Stage {g.level} | Score: {g.score:06d}",
+                f"Stress: {g.multiplier}X",
+            )
         elif g.current_state == STATE_PAUSED:
-            discord.update(settings["discord_rpc_enabled"], f"Stage {g.level} | PAUSED", f"Score: {g.score:06d}")
+            discord.update(
+                settings["discord_rpc_enabled"],
+                f"Stage {g.level} | PAUSED",
+                f"Score: {g.score:06d}",
+            )
         elif g.current_state == STATE_GAMEOVER:
-            discord.update(settings["discord_rpc_enabled"], "Mission Terminated", f"Final Score: {g.score:06d}")
+            discord.update(
+                settings["discord_rpc_enabled"],
+                "Mission Terminated",
+                f"Final Score: {g.score:06d}",
+            )
 
     # Handle Events
     handle_events(g, settings, sound_mgr, discord)
@@ -82,28 +110,40 @@ while g.running:
 
         # --- Overdrive Gun Heat Cooling (HARDENED: Slower cooling rate) ---
         if g.options_overdrive:
-            g.gun_heat = max(0.0, getattr(g, 'gun_heat', 0.0) - 1.0 * dt)
-            if getattr(g, 'overheated', False) and g.gun_heat <= 0:
+            g.gun_heat = max(0.0, getattr(g, "gun_heat", 0.0) - 1.0 * dt)
+            if getattr(g, "overheated", False) and g.gun_heat <= 0:
                 g.overheated = False
 
         beat_interval = max(4, 24 - (g.multiplier * 3))
         if g.frame_count % beat_interval == 0 and not sound_mgr.chan_hum.get_busy():
             stress_freq = 55 + (g.multiplier * 14)
-            dynamic_hum = gen_square_wave(stress_freq, 0.15 + (0.02 * g.multiplier), 0.08, settings["master_volume"])
+            dynamic_hum = gen_square_wave(
+                stress_freq,
+                0.15 + (0.02 * g.multiplier),
+                0.08,
+                settings["master_volume"],
+            )
             sound_mgr.chan_hum.play(dynamic_hum)
 
         keys = pygame.key.get_pressed()
-        x_dir = (1 if keys[pygame.K_LEFT] or keys[pygame.K_a] else 0) - (1 if keys[pygame.K_RIGHT] or keys[pygame.K_d] else 0)
-        y_dir = (1 if keys[pygame.K_DOWN] or keys[pygame.K_s] else 0) - (1 if keys[pygame.K_UP] or keys[pygame.K_w] else 0)
+        x_dir = (1 if keys[pygame.K_LEFT] or keys[pygame.K_a] else 0) - (
+            1 if keys[pygame.K_RIGHT] or keys[pygame.K_d] else 0
+        )
+        y_dir = (1 if keys[pygame.K_DOWN] or keys[pygame.K_s] else 0) - (
+            1 if keys[pygame.K_UP] or keys[pygame.K_w] else 0
+        )
 
-        # --- Player Shooting Input & Overheat Logic ---
-        if (keys[pygame.K_SPACE] or keys[pygame.K_z]) and g.shoot_cooldown <= 0:
-            if not (g.options_overdrive and getattr(g, 'overheated', False)):
-                cooldown_val = 7 if g.rapid_fire_timer > 0 else 14  # Slightly slower firing cooldown
-                g.shoot_cooldown = cooldown_val
+        # --- Held Shooting Input (ONLY ACTIVE WHEN RAPID FIRE IS ON) ---
+        if (
+            (keys[pygame.K_SPACE] or keys[pygame.K_z])
+            and g.rapid_fire_timer > 0
+            and g.shoot_cooldown <= 0
+        ):
+            if not (g.options_overdrive and getattr(g, "overheated", False)):
+                g.shoot_cooldown = 7  # Fast cooldown rate during Rapid Fire
 
                 if g.options_overdrive:
-                    g.gun_heat = getattr(g, 'gun_heat', 0.0) + 24.0  # HARDENED: Builds heat faster
+                    g.gun_heat = getattr(g, "gun_heat", 0.0) + 24.0
                     if g.gun_heat >= 100.0:
                         g.gun_heat = 100.0
                         g.overheated = True
@@ -111,9 +151,18 @@ while g.running:
 
                 if g.shotgun_active:
                     for spread in [-0.2, 0.0, 0.2]:
-                        g.bullets.append({"angle": g.player_angle + spread, "dist": g.player_distance})
+                        g.bullets.append(
+                            {
+                                "angle": g.player_angle + spread,
+                                "dist": g.player_distance,
+                            }
+                        )
                 else:
-                    g.bullets.append({"angle": g.player_angle, "dist": g.player_distance})
+                    g.bullets.append(
+                        {"angle": g.player_angle, "dist": g.player_distance}
+                    )
+
+                sound_mgr.chan_sfx.play(sound_mgr.snd_laser)
 
         if settings["invert_x"]:
             x_dir *= -1
@@ -121,7 +170,9 @@ while g.running:
             y_dir *= -1
 
         is_static = x_dir == 0 and y_dir == 0
-        camping_penalty = 1.8 if is_static else 1.0  # HARDENED: Camping increases incoming speed by 80%
+        camping_penalty = (
+            1.8 if is_static else 1.0
+        )  # HARDENED: Camping increases incoming speed by 80%
 
         if x_dir != 0:
             g.player_velocity += (x_dir * 0.012) * dt
@@ -143,8 +194,15 @@ while g.running:
         if g.invincible_timer > 0:
             g.invincible_timer -= dt
 
-        # HARDENED: Faster spawn rate scaling (floor lowered from 4 to 2 frames)
-        spawn_rate = max(2, (28 - (g.multiplier * 3) - (g.level * 2)))
+        # --- HIGH-DENSITY ASTEROID SPAWNING ---
+        base_interval = 22 - (g.multiplier * 2) - (g.level * 2)
+        if g.options_overdrive:
+            # Overdrive spawns 45% faster, allowing tick rates as low as 1 frame
+            spawn_rate = max(1, int(base_interval * 0.55))
+        else:
+            # Base mode gets a tighter floor limit of 2 frames
+            spawn_rate = max(2, base_interval)
+
         if g.frame_count % spawn_rate == 0:
             spawn_obstacle(g.obstacles, g.options_overdrive, g.level, g.multiplier)
 
@@ -157,10 +215,14 @@ while g.running:
         # Powerup movement & pickup
         for p in g.powerups[:]:
             p["dist"] += p["speed"] * dt
-            angle_diff_p = (g.player_angle - p["angle"] + math.pi) % (2 * math.pi) - math.pi
+            angle_diff_p = (g.player_angle - p["angle"] + math.pi) % (
+                2 * math.pi
+            ) - math.pi
             if abs(p["dist"] - g.player_distance) < 15 and abs(angle_diff_p) < 0.25:
                 if p["type"] == "F":
-                    g.lives = 5  # HARDENED: Full heal gives 5 max
+                    g.lives = (
+                        5 if g.options_overdrive else 12
+                    )  # 5 for Overdrive, full 12 for standard
                 elif p["type"] == "S":
                     g.shotgun_active = True
                 elif p["type"] == "H":
@@ -175,12 +237,16 @@ while g.running:
         # Obstacles movement & collisions
         for obs in g.obstacles[:]:
             obs["dist"] += obs["speed"] * dt * camping_penalty
-            
+
             for b in g.bullets[:]:
-                angle_diff = (b["angle"] - obs["angle"] + math.pi) % (2 * math.pi) - math.pi
+                angle_diff = (b["angle"] - obs["angle"] + math.pi) % (
+                    2 * math.pi
+                ) - math.pi
                 # HARDENED: Tighter bullet-to-obstacle hitboxes
                 if abs(b["dist"] - obs["dist"]) < 15 and abs(angle_diff) < 0.25:
-                    g.score += 100 * g.multiplier * g.level
+                    overdrive_pts = 2 if g.options_overdrive else 1
+                    g.score += (100 * g.multiplier * g.level) * overdrive_pts
+
                     if g.score > g.high_score:
                         g.high_score = g.score
                     g.multiplier_streak += 1
@@ -193,8 +259,10 @@ while g.running:
 
                     # Lower powerup drop rate (15% vs 25%)
                     if random.random() < 0.15:
-                        spawn_powerup(g.powerups, obs["angle"], obs["dist"], g.level, g.multiplier)
-                    
+                        spawn_powerup(
+                            g.powerups, obs["angle"], obs["dist"], g.level, g.multiplier
+                        )
+
                     # HARDENED: Requires 25 kills per level (up from 15)
                     if g.level_kills >= 25:
                         g.level += 1
@@ -203,10 +271,13 @@ while g.running:
                         g.shotgun_active = False
                         sound_mgr.chan_music.play(sound_mgr.snd_stage_clear)
                         g.current_state = STATE_TRANSITION
-                    
-                    # HARDENED: Takes 6 kills per multiplier step (up from 4)
-                    if g.multiplier_streak % 6 == 0 and g.multiplier < 8:
+
+                    # --- ACCELERATED OVERDRIVE STRESS MULTIPLIER ---
+                    # Standard takes 6 kills per step; Overdrive takes only 3 kills!
+                    streak_threshold = 3 if g.options_overdrive else 6
+                    if g.multiplier_streak % streak_threshold == 0 and g.multiplier < 8:
                         g.multiplier += 1
+
                     if settings["screen_shake_enabled"]:
                         g.shake_intensity = 7
                     g.strobe_flash = True
@@ -218,8 +289,14 @@ while g.running:
                     break
 
             # HARDENED: Tighter player hitboxes + shorter i-frames (30 frames vs 60)
-            angle_diff_player = (g.player_angle - obs["angle"] + math.pi) % (2 * math.pi) - math.pi
-            if abs(obs["dist"] - g.player_distance) < 14 and abs(angle_diff_player) < 0.22 and g.invincible_timer <= 0:
+            angle_diff_player = (g.player_angle - obs["angle"] + math.pi) % (
+                2 * math.pi
+            ) - math.pi
+            if (
+                abs(obs["dist"] - g.player_distance) < 14
+                and abs(angle_diff_player) < 0.22
+                and g.invincible_timer <= 0
+            ):
                 g.lives -= 1
                 g.multiplier, g.multiplier_streak = 1, 0
                 g.invincible_timer = 30
@@ -246,8 +323,16 @@ while g.running:
     scaled_w, scaled_h = int(WIDTH * scale), int(HEIGHT * scale)
     offset_x, offset_y = (win_w - scaled_w) // 2, (win_h - scaled_h) // 2
 
-    rx = random.randint(-int(g.shake_intensity), int(g.shake_intensity)) if (g.shake_intensity > 0 and settings["screen_shake_enabled"]) else 0
-    ry = random.randint(-int(g.shake_intensity), int(g.shake_intensity)) if (g.shake_intensity > 0 and settings["screen_shake_enabled"]) else 0
+    rx = (
+        random.randint(-int(g.shake_intensity), int(g.shake_intensity))
+        if (g.shake_intensity > 0 and settings["screen_shake_enabled"])
+        else 0
+    )
+    ry = (
+        random.randint(-int(g.shake_intensity), int(g.shake_intensity))
+        if (g.shake_intensity > 0 and settings["screen_shake_enabled"])
+        else 0
+    )
     if g.shake_intensity > 0 and g.current_state == STATE_PLAYING:
         g.shake_intensity -= dt
 

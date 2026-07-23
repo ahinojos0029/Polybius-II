@@ -21,14 +21,20 @@ LEVEL_PALETTES = [
 ]
 
 SUBLIMINALS = [
-    "CONSUME MORE",
-    "DO NOT LOOK AWAY",
-    "YOUR EYES HURT",
-    "ACCEPT THE SIGNAL",
+    "THEY DONT WANT YOU",
+    "YOU ARE NOT ALONE",
+    "IT NEVER EXISTED",
+    "IT'S ALL IN YOUR HEAD",
+    "THEY ARE WATCHING",
+    "YOU ARE NOT SAFE",
+    "THEY ARE PLANNING",
+    "FORGET THEM",
+    "ACCEPT THE TRUTH",
+    "THEY ARE EVERYWHERE",
+    "YOU CANNOT ESCAPE",
     "YOU CANNOT WIN",
-    "MINDLESS",
-    "ABSOLUTE CONTROL",
-    "REPLACE THE THOUGHT",
+    "THEY ARE IN CONTROL",
+    "YOUR EYES ARE LYING",
 ]
 
 # In config.py
@@ -42,6 +48,6 @@ DEFAULT_SETTINGS = {
 }
 
 # Add a high-visibility palette for Colorblind Mode
-CB_PLAYER = (255, 230, 0)      # High-visibility Bright Yellow
-CB_AMBER = (255, 170, 0)       # Deep High-Contrast Orange
-CB_CYAN = (0, 210, 255)        # Electric Blue
+CB_PLAYER = (255, 230, 0)  # High-visibility Bright Yellow
+CB_AMBER = (255, 170, 0)  # Deep High-Contrast Orange
+CB_CYAN = (0, 210, 255)  # Electric Blue

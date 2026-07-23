@@ -84,6 +84,7 @@ def handle_events(g, settings, sound_mgr, discord):
                         save_settings(settings)
                     elif g.pause_selection == 5 and g.overdrive_unlocked:
                         g.options_overdrive = not g.options_overdrive
+                        g.lives = min(g.lives, 3)
                 elif event.key == pygame.K_q:
                     g.current_state = STATE_MAIN_MENU
                     g.menu_selection = 0
@@ -208,6 +209,7 @@ def handle_events(g, settings, sound_mgr, discord):
                                     discord.clear()
                             elif g.options_item_idx == 1 and g.overdrive_unlocked:
                                 g.options_overdrive = not g.options_overdrive
+                                g.lives = min(g.lives, 3)
                             save_settings(settings)
 
                     # Allow volume adjustment with Left/Right arrows
@@ -234,26 +236,49 @@ def handle_events(g, settings, sound_mgr, discord):
 
             # --- LEADERBOARD ---
             elif g.current_state == STATE_LEADERBOARD:
-                if event.key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_ESCAPE):
+                if event.key in (
+                    pygame.K_LEFT,
+                    pygame.K_a,
+                    pygame.K_RIGHT,
+                    pygame.K_d,
+                ):
+                    g.leaderboard_tab = (
+                        1 - g.leaderboard_tab
+                    )  # Toggle tab between 0 and 1
+                elif event.key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_ESCAPE):
                     g.current_state = STATE_MAIN_MENU
 
-            # --- PLAYING ---
+            # --- PLAYING (SINGLE TAPS) ---
             elif g.current_state == STATE_PLAYING:
-                if event.key == pygame.K_SPACE and g.shoot_cooldown <= 0:
-                    sound_mgr.chan_sfx.play(sound_mgr.snd_laser)
-                    if g.shotgun_active:
-                        for offset in [-0.15, 0.0, 0.15]:
+                if event.key in (pygame.K_SPACE, pygame.K_z) and g.shoot_cooldown <= 0:
+                    if not (g.options_overdrive and getattr(g, "overheated", False)):
+                        g.shoot_cooldown = 14  # Standard cooldown rate for single taps
+
+                        # Overdrive heat buildup
+                        if g.options_overdrive:
+                            g.gun_heat = getattr(g, "gun_heat", 0.0) + 24.0
+                            if g.gun_heat >= 100.0:
+                                g.gun_heat = 100.0
+                                g.overheated = True
+                                sound_mgr.chan_sfx.play(sound_mgr.snd_explode)
+
+                        if g.shotgun_active:
+                            for offset in [-0.15, 0.0, 0.15]:
+                                g.bullets.append(
+                                    {
+                                        "angle": g.player_angle + offset,
+                                        "dist": g.player_distance,
+                                    }
+                                )
+                        else:
                             g.bullets.append(
                                 {
-                                    "angle": g.player_angle + offset,
+                                    "angle": g.player_angle,
                                     "dist": g.player_distance,
                                 }
                             )
-                    else:
-                        g.bullets.append(
-                            {"angle": g.player_angle, "dist": g.player_distance}
-                        )
-                    g.shoot_cooldown = 8 if g.rapid_fire_timer > 0 else 16
+
+                        sound_mgr.chan_sfx.play(sound_mgr.snd_laser)
 
             # --- ENTER NAME (HIGH SCORE) ---
             elif g.current_state == STATE_ENTER_NAME:
@@ -271,10 +296,6 @@ def handle_events(g, settings, sound_mgr, discord):
                     g.name_cursor_idx = min(2, g.name_cursor_idx + 1)
                 elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
                     new_name = "".join(g.player_name_chars)
-                    g.leaderboard.append([new_name, g.score])
-                    g.leaderboard.sort(key=lambda x: x[1], reverse=True)
-                    g.leaderboard.pop()
-                    save_leaderboard(g.leaderboard)
-                    g.high_score = g.leaderboard[0][1]
+                    g.submit_high_score(new_name)
                     g.current_state = STATE_MAIN_MENU
                     g.menu_selection = 0

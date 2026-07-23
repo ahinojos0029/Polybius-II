@@ -257,18 +257,38 @@ def render_frame(canvas, g, ui, settings):
 
     elif g.current_state == STATE_LEADERBOARD:
         canvas.fill(BLACK)
-        ui.draw_text(
-            canvas, "GLOBAL LEADERBOARD", WIDTH // 2, 50, AMBER, "lg", center=True
+
+        view_board = (
+            g.leaderboard_overdrive if g.leaderboard_tab == 1 else g.leaderboard_normal
         )
-        for idx, entry in enumerate(g.leaderboard):
+        title_text = (
+            "OVERDRIVE LEADERBOARD (2X PTS)"
+            if g.leaderboard_tab == 1
+            else "STANDARD LEADERBOARD"
+        )
+        title_color = RED_TEXT if g.leaderboard_tab == 1 else AMBER
+
+        ui.draw_text(canvas, title_text, WIDTH // 2, 40, title_color, "lg", center=True)
+        ui.draw_text(
+            canvas,
+            "< LEFT / RIGHT TO SWITCH BOARDS >",
+            WIDTH // 2,
+            75,
+            CYAN,
+            "sm",
+            center=True,
+        )
+
+        for idx, entry in enumerate(view_board):
             line_str = f"{idx+1}. {entry[0]}  ---  {entry[1]:06d}"
             ui.draw_text(
-                canvas, line_str, WIDTH // 2, 120 + (idx * 35), WHITE, "md", center=True
+                canvas, line_str, WIDTH // 2, 125 + (idx * 35), WHITE, "md", center=True
             )
+
         if (g.frame_count // 30) % 2 == 0:
             ui.draw_text(
                 canvas,
-                "PRESS ENTER TO RETURN",
+                "PRESS ENTER OR ESC TO RETURN",
                 WIDTH // 2,
                 380,
                 GREEN,
@@ -438,19 +458,46 @@ def render_frame(canvas, g, ui, settings):
                 pygame.draw.polygon(canvas, BLACK, [p1, p2, p3], width=5)
             pygame.draw.polygon(canvas, player_color, [p1, p2, p3], width=2)
 
-        # Subliminals
-        subliminal_interval = max(30, 180 - (g.multiplier * 20))
-        subliminal_duration = min(45, 20 + (g.multiplier * 3))
-        if (
-            g.frame_count % subliminal_interval == 0
-            and g.current_state == STATE_PLAYING
-        ):
-            g.subliminal_text = random.choice(SUBLIMINALS)
-        if (g.frame_count % subliminal_interval) < subliminal_duration:
-            flash_x = WIDTH // 2 + (random.randint(-10, 10) if g.multiplier >= 5 else 0)
-            flash_y = (cy - 20) + (random.randint(-8, 8) if g.multiplier >= 6 else 0)
+        # --- Randomized & High-Contrast Subliminals ---
+        dt = 1.0  # Or pass 'dt' into render_frame if available
+
+        # 1. Countdown cooldown when no message is active
+        if getattr(g, "subliminal_timer", 0) <= 0:
+            g.next_subliminal_cooldown -= 1.0 * dt
+            if g.next_subliminal_cooldown <= 0 and g.current_state == STATE_PLAYING:
+                # Pick a new random phrase
+                g.subliminal_text = random.choice(SUBLIMINALS)
+
+                # Active flash duration (20 to 45 ticks based on multiplier)
+                g.subliminal_timer = min(45, 20 + (g.multiplier * 3))
+
+                # Set a RANDOM interval for the next appearance
+                min_wait = max(40, 120 - (g.multiplier * 10))
+                max_wait = max(90, 240 - (g.multiplier * 15))
+                g.next_subliminal_cooldown = float(random.randint(min_wait, max_wait))
+
+        # 2. Render & decrement active flash timer
+        if getattr(g, "subliminal_timer", 0) > 0 and g.current_state == STATE_PLAYING:
+            g.subliminal_timer -= 1.0 * dt
+
+            # Compute high-contrast color by inverting the current level background
+            bg_color = active_palette[0]
+            contrast_color = (255 - bg_color[0], 255 - bg_color[1], 255 - bg_color[2])
+
+            # Position centered at cy + high stress jitter
+            flash_x = (WIDTH // 2) + (
+                random.randint(-10, 10) if g.multiplier >= 5 else 0
+            )
+            flash_y = cy + (random.randint(-8, 8) if g.multiplier >= 6 else 0)
+
             ui.draw_text(
-                canvas, g.subliminal_text, flash_x, flash_y, MAGENTA, "lg", center=True
+                canvas,
+                g.subliminal_text,
+                flash_x,
+                flash_y,
+                contrast_color,
+                "lg",
+                center=True,
             )
 
         # HUD UI
@@ -472,7 +519,7 @@ def render_frame(canvas, g, ui, settings):
 
         # --- Overdrive HUD Indicator & Heat Gauge ---
         if g.options_overdrive:
-            ui.draw_text(canvas, "OVERDRIVE: ACTIVE", 20, 138, RED_TEXT, "sm")
+            ui.draw_text(canvas, "OVERDRIVE: ACTIVE [2X PTS]", 20, 138, RED_TEXT, "sm")
 
             gun_heat = getattr(g, "gun_heat", 0.0)
             is_overheated = getattr(g, "overheated", False)
