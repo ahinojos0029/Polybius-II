@@ -90,7 +90,9 @@ jobs:
       - name: Compress Build (Linux)
         if: runner.os == 'Linux'
         run: |
-          tar -czvf POLYBIUS-II-Linux.tar.gz -C dist/main.dist .
+          DIST_DIR="$(find dist -maxdepth 1 -type d -name '*.dist' | head -n 1)"
+          test -n "$DIST_DIR"
+          tar -czvf POLYBIUS-II-Linux.tar.gz -C "$DIST_DIR" .
 
       # macOS Archive (.app bundle zip)
       - name: Compress Build (macOS)
