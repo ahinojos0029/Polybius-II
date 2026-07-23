@@ -73,7 +73,7 @@ def run_local_socket_server():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     try:
-        server.bind(("127.0.0.1", SOCKET_PORT))
+        server.bind(("0.0.0.0", SOCKET_PORT))
         server.listen(2)
         server_running = True
         while server_running:
