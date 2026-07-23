@@ -32,13 +32,6 @@ jobs:
         with:
           python-version: "3.11"
 
-      # Install GCC / C++ Compiler on Windows
-      - name: Install MinGW-w64 (Windows)
-        if: runner.os == 'Windows'
-        uses: egor-tresin/setup-mingw-w64@v1
-        with:
-          version: "12.2.0"
-
       # Linux dependencies needed for audio & Nuitka library linking
       - name: Install System Dependencies (Linux)
         if: runner.os == 'Linux'
@@ -51,7 +44,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install pygame pypresence pillow nuitka zstandard
 
-      # Windows Build (Nuitka)
+      # Windows Build (Nuitka auto-fetches MinGW compiler)
       - name: Build Executable (Windows)
         if: runner.os == 'Windows'
         run: |
