@@ -48,19 +48,19 @@ jobs:
       - name: Build Executable (Windows)
         if: runner.os == 'Windows'
         run: |
-          pyinstaller --noconfirm --onedir --windowed --icon=icon.ico main.py
+          pyinstaller --noconfirm --onedir --windowed --icon=icon.ico polybius.py
 
       # Linux Build (.ico converts gracefully on PyInstaller)
       - name: Build Executable (Linux)
         if: runner.os == 'Linux'
         run: |
-          pyinstaller --noconfirm --onedir --icon=icon.ico main.py
+          pyinstaller --noconfirm --onedir --icon=icon.ico polybius.py
 
       # macOS Build (Passes icon if available)
       - name: Build Executable (macOS)
         if: runner.os == 'macOS'
         run: |
-          pyinstaller --noconfirm --onedir --windowed --icon=icon.ico main.py
+          pyinstaller --noconfirm --onedir --windowed --icon=icon.ico polybius.py
 
       # Archive Windows (.zip)
       - name: Compress Build (Windows)
