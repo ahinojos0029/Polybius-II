@@ -2,22 +2,26 @@
 import math
 import random
 
-def spawn_obstacle(obstacles, options_overdrive, level, multiplier):
-    angle = random.uniform(0, math.pi * 2)
-    speed_mult = 2.0 if options_overdrive else 1.0
-    speed = (
-        (random.uniform(1.2, 2.2) + (multiplier * 0.1) + (level * 0.15))
-        * 0.35
-        * speed_mult
-    )
-    obstacles.append(
-        {
-            "angle": angle,
-            "dist": 5,
-            "speed": speed,
-            "sides": random.choice([3, 4, 5, 6]),
-        }
-    )
+def spawn_fragment(obstacles, angle, dist, level):
+    obstacles.append({
+        "angle": angle + random.choice([-0.25, 0.25]),
+        "dist": dist,
+        "speed": 6.0 + (level * 0.5),
+        "sides": 3,  # Shard shape
+        "is_fragment": True
+    })
+
+def spawn_obstacle(obstacles, overdrive, level, multiplier):
+    angle = random.uniform(0, 2 * math.pi)
+    speed = 2.0 + (level * 0.4) + (multiplier * 0.2)
+    sides = random.choice([4, 5, 6])
+    obstacles.append({
+        "angle": angle,
+        "dist": 20,
+        "speed": speed,
+        "sides": sides,
+        "is_fragment": False
+    })
 
 def spawn_powerup(powerups, angle, dist, level, multiplier):
     stress_rarity_penalty = (multiplier - 1) * 0.05

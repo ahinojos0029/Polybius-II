@@ -13,6 +13,17 @@ from game_state import (
 )
 
 def render_frame(canvas, g, ui, settings):
+    # --- 1. SCREEN SHAKE OFFSET CALCULATION ---
+    if g.shake_intensity > 0 and g.current_state in (STATE_PLAYING, STATE_PAUSED) and settings.get("screen_shake_enabled", True):
+        intensity = int(g.shake_intensity)
+        render_offset_x = random.randint(-intensity, intensity)
+        render_offset_y = random.randint(-intensity, intensity)
+        g.shake_intensity = max(0, g.shake_intensity - 1)
+    else:
+        render_offset_x = 0
+        render_offset_y = 0
+        g.shake_intensity = 0
+
     if g.current_state == STATE_WARNING:
         canvas.fill(BLACK)
         ui.draw_text(canvas, "WARNING: PHOTOSENSITIVE SEIZURES", WIDTH // 2, 80, RED_TEXT, "lg", center=True)
@@ -25,7 +36,7 @@ def render_frame(canvas, g, ui, settings):
 
     elif g.current_state == STATE_MAIN_MENU:
         canvas.fill(BLACK)
-        ui.draw_text(canvas, "POLYBIUS II", WIDTH // 2, 80, CYAN, "xl", center=True)
+        ui.draw_text(canvas, "POLYBIUS", WIDTH // 2, 80, CYAN, "xl", center=True)
         options = ["1. ARCADE QUICK RUN", "2. CAMPAIGN SELECTOR", "3. OPTIONS & SCORES"]
         for idx, opt in enumerate(options):
             color = GREEN if idx == g.menu_selection else WHITE
@@ -129,13 +140,18 @@ def render_frame(canvas, g, ui, settings):
         g.strobe_flash = False
         active_palette = LEVEL_PALETTES[(g.level - 1) % len(LEVEL_PALETTES)]
 
-        # Tunnel Rings
+        # Tunnel Rendering
         cx, cy = WIDTH // 2, HEIGHT // 2
         max_radius = 400
         pulse = math.sin(g.frame_count * (0.08 + g.level * 0.01)) * (20 + g.level * 2)
         spin_speed = (0.02 + (g.multiplier * 0.008) + (g.level * 0.005)) * (-1 if g.multiplier >= 4 else 1)
+        if g.options_overdrive:
+            spin_speed *= 1.8
+
         sides = 8 if g.level < 3 else (6 if g.level < 5 else 10)
-        tunnel_speed = 8.5 + (g.level * 0.6) + (g.multiplier * 1.5)
+        
+        overdrive_mult = 1.75 if g.options_overdrive else 1.0
+        tunnel_speed = (8.5 + (g.level * 0.6) + (g.multiplier * 1.5)) * overdrive_mult
 
         for i in range(45):
             radius = ((g.frame_count * tunnel_speed + i * 14) % max_radius) + 2 + pulse
@@ -228,6 +244,20 @@ def render_frame(canvas, g, ui, settings):
             ui.draw_text(canvas, "RAPID FIRE", 20, 100, AMBER, "sm")
         if g.shotgun_active:
             ui.draw_text(canvas, "SPREAD SHOT", 20, 118, CYAN, "sm")
+            
+        # --- Overdrive HUD Indicator & Heat Gauge ---
+        if g.options_overdrive:
+            ui.draw_text(canvas, "OVERDRIVE: ACTIVE", 20, 138, RED_TEXT, "sm")
+            
+            gun_heat = getattr(g, 'gun_heat', 0.0)
+            is_overheated = getattr(g, 'overheated', False)
+            heat_color = RED_TEXT if is_overheated else (AMBER if gun_heat > 60 else GREEN)
+            
+            pygame.draw.rect(canvas, WHITE, (20, 155, 100, 8), 1)
+            pygame.draw.rect(canvas, heat_color, (21, 156, int(gun_heat * 0.98), 6))
+            if is_overheated:
+                if (g.frame_count // 10) % 2 == 0:
+                    ui.draw_text(canvas, "OVERHEAT!", 128, 152, RED_TEXT, "sm")
 
         for i in range(min(g.lives, 12)):
             pygame.draw.circle(canvas, RED_TEXT, (WIDTH - 30 - (i * 15), 25), 5)
@@ -278,3 +308,5 @@ def render_frame(canvas, g, ui, settings):
             ui.draw_text(canvas, char, start_x + (i * 45) + 12, 218, box_color, "lg")
         if (g.frame_count // 30) % 2 == 0:
             ui.draw_text(canvas, "USE ARROWS & ENTER TO SUBMIT", WIDTH // 2, 320, CYAN, "sm", center=True)
+
+    return render_offset_x, render_offset_y

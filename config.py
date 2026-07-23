@@ -1,5 +1,5 @@
 # config.py
-APP_NAME = "POLYBIUS II"
+APP_NAME = "POLYBIUS"
 WIDTH, HEIGHT = 640, 480
 
 # Colors

@@ -17,11 +17,11 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            artifact_name: POLYBIUS-II-Windows.zip
+            artifact_name: POLYBIUS-Windows.zip
           - os: ubuntu-latest
-            artifact_name: POLYBIUS-II-Linux.tar.gz
+            artifact_name: POLYBIUS-Linux.tar.gz
           - os: macos-latest
-            artifact_name: POLYBIUS-II-macOS.zip
+            artifact_name: POLYBIUS-macOS.zip
 
     steps:
       - name: Checkout Code
@@ -84,7 +84,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: powershell
         run: |
-          Compress-Archive -Path dist/main.dist -DestinationPath POLYBIUS-II-Windows.zip
+          Compress-Archive -Path dist/main.dist -DestinationPath POLYBIUS-Windows.zip
 
       # Linux Archive
       - name: Compress Build (Linux)
@@ -92,13 +92,13 @@ jobs:
         run: |
           DIST_DIR="$(find dist -maxdepth 1 -type d -name '*.dist' | head -n 1)"
           test -n "$DIST_DIR"
-          tar -czvf POLYBIUS-II-Linux.tar.gz -C "$DIST_DIR" .
+          tar -czvf POLYBIUS-Linux.tar.gz -C "$DIST_DIR" .
 
       # macOS Archive (.app bundle zip)
       - name: Compress Build (macOS)
         if: runner.os == 'macos'
         run: |
-          cd dist && zip -r ../POLYBIUS-II-macOS.zip main.app
+          cd dist && zip -r ../POLYBIUS-macOS.zip main.app
 
       - name: Upload Assets to GitHub Release
         uses: softprops/action-gh-release@v2

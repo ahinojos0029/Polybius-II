@@ -4,14 +4,14 @@ import os
 import sys
 from pathlib import Path
 
-APP_NAME = "POLYBIUS II"
+APP_NAME = "POLYBIUS"
 
 def get_app_dir() -> Path:
     """Returns standard platform-specific directory for saving configs/scores.
 
-    Windows: %APPDATA%\PolybiusII (or Documents\PolybiusII)
-    Linux:   ~/.config/PolybiusII
-    macOS:   ~/Library/Application Support/PolybiusII
+    Windows: %APPDATA%\POLYBIUS (or Documents\POLYBIUS)
+    Linux:   ~/.config/POLYBIUS
+    macOS:   ~/Library/Application Support/POLYBIUS
     """
     home = Path.home()
     if sys.platform == "win32":

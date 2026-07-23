@@ -40,12 +40,12 @@ class GameState:
         self.name_cursor_idx = 0
         self.high_score = self.leaderboard[0][1] if self.leaderboard else 0
 
-        # Player stats
+        # Player stats (HARDENED: Starting lives reduced from 9 to 3)
         self.player_angle = 0.0
         self.player_velocity = 0.0
         self.player_distance = 180
         self.player_dist_velocity = 0.0
-        self.lives = 9
+        self.lives = 3
         self.score = 0
         self.level = 1
         self.level_kills = 0
@@ -68,6 +68,8 @@ class GameState:
         self.shake_intensity = 0
         self.strobe_flash = False
         self.subliminal_text = ""
+        self.gun_heat = 0.0
+        self.overheated = False
 
     def unlock_overdrive(self, settings):
         self.overdrive_unlocked = True
@@ -75,7 +77,7 @@ class GameState:
         save_settings(settings)
 
     def reset_game(self, starting_level=1):
-        self.lives = 9
+        self.lives = 3  # HARDENED: Starts with 3 lives instead of 9
         self.score = 0
         self.level = starting_level
         self.level_kills = 0
@@ -92,6 +94,9 @@ class GameState:
         self.bullets.clear()
         self.obstacles.clear()
         self.powerups.clear()
+        self.shake_intensity = 0
+        self.gun_heat = 0.0
+        self.overheated = False
 
     def check_high_score(self):
         return self.score > self.leaderboard[-1][1] if self.leaderboard else True
