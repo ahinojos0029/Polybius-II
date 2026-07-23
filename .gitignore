@@ -1,5 +1,4 @@
 /.mypy_cache
 /polybius_ii_scores.json
-/polybius.spec
-/dist
-/build
+/__pycache__
+/polybius.py

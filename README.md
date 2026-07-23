@@ -34,7 +34,7 @@ A spiritual successor and modern reimagining of the classic 1981 urban legend ar
 2. Run the game script:
 
    ```bash
-   python polybius.py
+   python main.py
    ```
 
 

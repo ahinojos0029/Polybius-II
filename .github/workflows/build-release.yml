@@ -54,7 +54,7 @@ jobs:
             --windows-icon-from-ico=icon.ico `
             --assume-yes-for-downloads `
             --output-dir=dist `
-            polybius.py
+            main.py
 
       # Linux Build
       - name: Build Executable (Linux)
@@ -65,7 +65,7 @@ jobs:
             --linux-icon=icon.ico \
             --assume-yes-for-downloads \
             --output-dir=dist \
-            polybius.py
+            main.py
 
       # macOS Build
       - name: Build Executable (macOS)
@@ -77,7 +77,7 @@ jobs:
             --macos-app-icon=icon.ico \
             --assume-yes-for-downloads \
             --output-dir=dist \
-            polybius.py
+            main.py
 
       # Windows Archive
       - name: Compress Build (Windows)
