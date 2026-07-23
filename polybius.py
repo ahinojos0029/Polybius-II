@@ -7,6 +7,7 @@ import json
 import os
 import socket
 import threading
+import urllib.request
 
 # Audio Initialization
 pygame.mixer.pre_init(frequency=22050, size=-16, channels=1, buffer=256)
@@ -17,6 +18,9 @@ WIDTH, HEIGHT = 640, 480
 SCREEN = pygame.display.set_mode((WIDTH, HEIGHT), pygame.FULLSCREEN)
 pygame.display.set_caption("POLYBIUS II - (C) 2026 ARMANDO HINOJOSA")
 CLOCK = pygame.time.Clock()
+
+# Master Server configuration for the global server browser
+MASTER_SERVER_URL = "web-production-f70f1.up.railway.app"  # Change this to your public master server URL once hosted
 
 # Safe Font Initialization
 try:
@@ -56,72 +60,14 @@ LEVEL_PALETTES = [
     [(255, 255, 255), (255, 100, 0), (0, 255, 255), (150, 0, 255)] 
 ]
 
-# Local Socket Multiplayer Server & Lobby State
-SOCKET_PORT = 5588
-server_running = False
+# Client & Lobby State
 client_socket = None
 lobby_slot = 0
 is_ready = False
 remote_ready = False
-lobby_status_text = "PRESS SPACE TO JOIN LOBBY"
-
-lobby_data_lock = threading.Lock()
-connected_clients = []
-
-def run_local_socket_server():
-    global server_running, connected_clients
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    try:
-        server.bind(("0.0.0.0", SOCKET_PORT))
-        server.listen(2)
-        server_running = True
-        while server_running:
-            conn, addr = server.accept()
-            with lobby_data_lock:
-                if len(connected_clients) < 2:
-                    slot = len(connected_clients) + 1
-                    connected_clients.append({"conn": conn, "slot": slot, "ready": False})
-                    threading.Thread(target=handle_lobby_client, args=(conn, slot), daemon=True).start()
-                else:
-                    conn.close()
-    except:
-        server_running = False
-
-def handle_lobby_client(conn, slot):
-    global connected_clients
-    try:
-        conn.sendall(json.dumps({"slot": slot}).encode() + b"\n")
-        while True:
-            data = conn.recv(1024)
-            if not data:
-                break
-            msg_str = data.decode().strip()
-            if msg_str == "READY":
-                with lobby_data_lock:
-                    for c in connected_clients:
-                        if c["conn"] == conn:
-                            c["ready"] = True
-            
-            with lobby_data_lock:
-                p1_ready = any(c["slot"] == 1 and c["ready"] for c in connected_clients)
-                p2_ready = any(c["slot"] == 2 and c["ready"] for c in connected_clients)
-                response = json.dumps({"p1_ready": p1_ready, "p2_ready": p2_ready}) + "\n"
-            
-            for c in connected_clients:
-                try:
-                    c["conn"].sendall(response.encode())
-                except:
-                    pass
-    except:
-        pass
-    finally:
-        with lobby_data_lock:
-            connected_clients = [c for c in connected_clients if c["conn"] != conn]
-        conn.close()
-
-server_thread = threading.Thread(target=run_local_socket_server, daemon=True)
-server_thread.start()
+server_list = []
+selected_server_idx = 0
+lobby_status_text = "PRESS ENTER TO REFRESH SERVERS"
 
 # Authentic 8-bit Sound Generators
 def gen_square_wave(freq, duration, volume=0.2):
@@ -222,6 +168,17 @@ def save_leaderboard(board):
     except:
         pass
 
+def fetch_public_servers():
+    global server_list, lobby_status_text
+    try:
+        req = urllib.request.Request(f"{MASTER_SERVER_URL}/servers")
+        with urllib.request.urlopen(req, timeout=3) as response:
+            server_list = json.loads(response.read().decode())
+            lobby_status_text = f"FOUND {len(server_list)} SERVERS. USE UP/DOWN & ENTER."
+    except:
+        server_list = []
+        lobby_status_text = "FAILED TO REACH MASTER SERVER."
+
 # Game States
 STATE_WARNING = -1
 STATE_MAIN_MENU = 0
@@ -292,14 +249,10 @@ def spawn_powerup(angle, dist):
     stress_rarity_penalty = (multiplier - 1) * 0.05
     stage_rarity_penalty = (level - 1) * 0.03
     roll = random.random() + stress_rarity_penalty + stage_rarity_penalty
-    if roll < 0.03:
-        ptype = 'F'
-    elif roll < 0.12:
-        ptype = 'S' 
-    elif roll < 0.35:
-        ptype = 'H'
-    else:
-        ptype = 'R'
+    if roll < 0.03: ptype = 'F'
+    elif roll < 0.12: ptype = 'S' 
+    elif roll < 0.35: ptype = 'H'
+    else: ptype = 'R'
     powerups.append({"angle": angle, "dist": dist, "type": ptype, "speed": 0.35})
 
 def check_high_score(final_score):
@@ -311,8 +264,7 @@ def check_high_score(final_score):
 running = True
 while running:
     dt = CLOCK.tick(60) / 1000.0 * 60.0
-    if dt > 3.0:
-        dt = 3.0
+    if dt > 3.0: dt = 3.0
 
     frame_count += 1
     
@@ -348,10 +300,8 @@ while running:
                     menu_selection = 0
                 elif current_state in (STATE_CAMPAIGN_MENU, STATE_MULTIPLAYER_LOBBY, STATE_OPTIONS, STATE_LEADERBOARD):
                     if current_state == STATE_MULTIPLAYER_LOBBY and client_socket:
-                        try:
-                            client_socket.close()
-                        except:
-                            pass
+                        try: client_socket.close()
+                        except: pass
                         client_socket = None
                     current_state = STATE_MAIN_MENU
                     menu_selection = 0
@@ -377,13 +327,8 @@ while running:
                         is_ready = False
                         remote_ready = False
                         lobby_slot = 0
-                        lobby_status_text = "CONNECTING TO LOBBY..."
-                        try:
-                            client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                            client_socket.connect(("127.0.0.1", SOCKET_PORT))
-                            lobby_status_text = "CONNECTED. WAITING FOR SLOT..."
-                        except:
-                            lobby_status_text = "SERVER OFFLINE. START ANOTHER WINDOW."
+                        client_socket = None
+                        fetch_public_servers()
                         current_state = STATE_MULTIPLAYER_LOBBY
                     elif menu_selection == 3:
                         secret_typed_buffer = ""
@@ -399,12 +344,30 @@ while running:
                     current_state = STATE_PLAYING
             
             elif current_state == STATE_MULTIPLAYER_LOBBY:
-                if event.key in (pygame.K_RETURN, pygame.K_SPACE) and client_socket and not is_ready:
-                    is_ready = True
-                    try:
-                        client_socket.sendall(b"READY\n")
-                    except:
-                        pass
+                if client_socket is None:
+                    if event.key == pygame.K_UP and server_list:
+                        selected_server_idx = (selected_server_idx - 1) % len(server_list)
+                    elif event.key == pygame.K_DOWN and server_list:
+                        selected_server_idx = (selected_server_idx + 1) % len(server_list)
+                    elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
+                        if server_list:
+                            chosen = server_list[selected_server_idx]
+                            try:
+                                client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                                client_socket.settimeout(3.0)
+                                client_socket.connect((chosen["ip"], chosen["port"]))
+                                client_socket.setblocking(False)
+                                lobby_status_text = "CONNECTED TO SERVER. WAITING FOR SLOT..."
+                            except Exception as e:
+                                client_socket = None
+                                lobby_status_text = f"CONNECTION FAILED: {str(e)}"
+                        else:
+                            fetch_public_servers()
+                else:
+                    if event.key in (pygame.K_RETURN, pygame.K_SPACE) and not is_ready:
+                        is_ready = True
+                        try: client_socket.sendall(b"READY\n")
+                        except: pass
 
             elif current_state == STATE_OPTIONS:
                 if event.key == pygame.K_l:
@@ -454,12 +417,9 @@ while running:
                     current_state = STATE_MAIN_MENU
                     menu_selection = 0
 
-    if shoot_cooldown > 0:
-        shoot_cooldown -= max(1, round(dt))
-    if rapid_fire_timer > 0:
-        rapid_fire_timer -= max(1, round(dt))
+    if shoot_cooldown > 0: shoot_cooldown -= max(1, round(dt))
+    if rapid_fire_timer > 0: rapid_fire_timer -= max(1, round(dt))
 
-    # Render target surface (maintains 640x480 aspect ratio internally)
     canvas = pygame.Surface((WIDTH, HEIGHT))
 
     if current_state == STATE_WARNING:
@@ -475,13 +435,11 @@ while running:
     elif current_state == STATE_MAIN_MENU:
         canvas.fill(BLACK)
         draw_text(canvas, "POLYBIUS II", WIDTH // 2, 80, CYAN, FONT_XL, center=True)
-        
-        options = ["1. ARCADE QUICK RUN", "2. CAMPAIGN SELECTOR", "3. ONLINE MULTIPLAYER LOBBY", "4. OPTIONS & SCORES"]
+        options = ["1. ARCADE QUICK RUN", "2. CAMPAIGN SELECTOR", "3. ONLINE SERVER BROWSER", "4. OPTIONS & SCORES"]
         for idx, opt in enumerate(options):
             color = GREEN if idx == menu_selection else WHITE
             prefix = "> " if idx == menu_selection else "  "
             draw_text(canvas, prefix + opt, WIDTH // 2 - 140, 200 + (idx * 45), color, FONT_MD)
-            
         draw_text(canvas, "USE ARROWS TO NAVIGATE | ENTER TO SELECT | ESC TO QUIT", WIDTH // 2, 430, WHITE, FONT_SM, center=True)
 
     elif current_state == STATE_CAMPAIGN_MENU:
@@ -495,27 +453,38 @@ while running:
 
     elif current_state == STATE_MULTIPLAYER_LOBBY:
         canvas.fill(BLACK)
-        draw_text(canvas, "ONLINE MULTIPLAYER LOBBY", WIDTH // 2, 50, CYAN, FONT_LG, center=True)
-        draw_text(canvas, lobby_status_text, WIDTH // 2, 110, WHITE, FONT_MD, center=True)
+        draw_text(canvas, "ONLINE SERVER BROWSER", WIDTH // 2, 40, CYAN, FONT_LG, center=True)
+        draw_text(canvas, lobby_status_text, WIDTH // 2, 85, WHITE, FONT_SM, center=True)
         
-        p1_status_str = "PLAYER 1: READY" if (is_ready if lobby_slot == 1 else remote_ready) else "PLAYER 1: WAITING..."
-        p2_status_str = "PLAYER 2: READY" if (is_ready if lobby_slot == 2 else remote_ready) else "PLAYER 2: WAITING..."
-        
-        draw_text(canvas, p1_status_str, WIDTH // 2, 180, GREEN if "READY" in p1_status_str else AMBER, FONT_MD, center=True)
-        draw_text(canvas, p2_status_str, WIDTH // 2, 220, GREEN if "READY" in p2_status_str else AMBER, FONT_MD, center=True)
-        
-        if lobby_slot != 0 and not is_ready:
-            if (frame_count // 30) % 2 == 0:
-                draw_text(canvas, "PRESS SPACE TO READY UP", WIDTH // 2, 310, CYAN, FONT_MD, center=True)
-        elif is_ready:
-            draw_text(canvas, "READY LOCKED. WAITING FOR OTHER PLAYER...", WIDTH // 2, 310, WHITE, FONT_SM, center=True)
+        if client_socket is None:
+            # Render Server List
+            if not server_list:
+                draw_text(canvas, "NO SERVERS FOUND. PRESS ENTER TO RETRY.", WIDTH // 2, 180, AMBER, FONT_SM, center=True)
+            else:
+                for s_idx, s in enumerate(server_list):
+                    s_color = GREEN if s_idx == selected_server_idx else WHITE
+                    s_prefix = "> " if s_idx == selected_server_idx else "  "
+                    line_txt = f"{s_prefix}{s['name']} ({s['ip']}:{s['port']})"
+                    draw_text(canvas, line_txt, WIDTH // 2 - 180, 140 + (s_idx * 30), s_color, FONT_MD)
+            draw_text(canvas, "UP/DOWN: SELECT | ENTER: JOIN SERVER", WIDTH // 2, 420, WHITE, FONT_SM, center=True)
+        else:
+            p1_status_str = "PLAYER 1: READY" if (is_ready if lobby_slot == 1 else remote_ready) else "PLAYER 1: WAITING..."
+            p2_status_str = "PLAYER 2: READY" if (is_ready if lobby_slot == 2 else remote_ready) else "PLAYER 2: WAITING..."
+            
+            draw_text(canvas, p1_status_str, WIDTH // 2, 180, GREEN if "READY" in p1_status_str else AMBER, FONT_MD, center=True)
+            draw_text(canvas, p2_status_str, WIDTH // 2, 220, GREEN if "READY" in p2_status_str else AMBER, FONT_MD, center=True)
+            
+            if lobby_slot != 0 and not is_ready:
+                if (frame_count // 30) % 2 == 0:
+                    draw_text(canvas, "PRESS SPACE TO READY UP", WIDTH // 2, 310, CYAN, FONT_MD, center=True)
+            elif is_ready:
+                draw_text(canvas, "READY LOCKED. WAITING FOR OTHER PLAYER...", WIDTH // 2, 310, WHITE, FONT_SM, center=True)
 
-        draw_text(canvas, "PRESS ESC TO ABORT & RETURN", WIDTH // 2, 420, WHITE, FONT_SM, center=True)
+            draw_text(canvas, "PRESS ESC TO ABORT & RETURN", WIDTH // 2, 420, WHITE, FONT_SM, center=True)
 
     elif current_state == STATE_OPTIONS:
         canvas.fill(BLACK)
         draw_text(canvas, "OPTIONS & SETTINGS", WIDTH // 2, 80, AMBER, FONT_LG, center=True)
-        
         if overdrive_unlocked:
             od_status = "ENABLED" if options_overdrive else "DISABLED"
             od_color = GREEN if options_overdrive else WHITE
@@ -523,18 +492,15 @@ while running:
             draw_text(canvas, "PRESS UP/DOWN TO TOGGLE OVERDRIVE", WIDTH // 2, 240, CYAN, FONT_SM, center=True)
         else:
             draw_text(canvas, "TYPE THE SECRET PASSWORD TO UNLOCK MODIFIERS", WIDTH // 2, 180, WHITE, FONT_SM, center=True)
-
         draw_text(canvas, "PRESS L TO VIEW LEADERBOARDS", WIDTH // 2, 300, MAGENTA, FONT_MD, center=True)
         draw_text(canvas, "PRESS ESC TO RETURN TO MENU", WIDTH // 2, 380, WHITE, FONT_SM, center=True)
 
     elif current_state == STATE_LEADERBOARD:
         canvas.fill(BLACK)
         draw_text(canvas, "GLOBAL LEADERBOARD", WIDTH // 2, 50, AMBER, FONT_LG, center=True)
-        
         for idx, entry in enumerate(leaderboard):
             line_str = f"{idx+1}. {entry[0]}  ---  {entry[1]:06d}"
             draw_text(canvas, line_str, WIDTH // 2, 120 + (idx * 35), WHITE, FONT_MD, center=True)
-
         if (frame_count // 30) % 2 == 0:
             draw_text(canvas, "PRESS ENTER TO RETURN", WIDTH // 2, 380, GREEN, FONT_MD, center=True)
 
@@ -542,9 +508,7 @@ while running:
         transition_timer -= dt
         canvas.fill(BLACK)
         draw_text(canvas, f"STAGE {level} READY", WIDTH // 2, HEIGHT // 2 - 20, WHITE, FONT_XL, center=True)
-        
-        if transition_timer <= 0:
-            current_state = STATE_PLAYING
+        if transition_timer <= 0: current_state = STATE_PLAYING
 
     elif current_state == STATE_PLAYING:
         beat_interval = max(6, 30 - (multiplier * 3))
@@ -554,7 +518,6 @@ while running:
             CHAN_HUM.play(dynamic_hum)
 
         keys = pygame.key.get_pressed()
-        
         is_static = not (keys[pygame.K_LEFT] or keys[pygame.K_a] or keys[pygame.K_RIGHT] or keys[pygame.K_d] or keys[pygame.K_UP] or keys[pygame.K_w] or keys[pygame.K_DOWN] or keys[pygame.K_s])
         camping_penalty = 1.4 if is_static else 1.0
 
@@ -575,8 +538,7 @@ while running:
 
         if invincible_timer > 0: invincible_timer -= dt
         spawn_rate = max(4, (36 - (multiplier * 2) - (level * 2)))
-        if frame_count % spawn_rate == 0:
-            spawn_obstacle()
+        if frame_count % spawn_rate == 0: spawn_obstacle()
 
         canvas.fill((40, 0, 40) if strobe_flash else BLACK)
         strobe_flash = False
@@ -589,15 +551,12 @@ while running:
         pulse = math.sin(frame_count * (0.08 + level * 0.01)) * (20 + level * 2)
         spin_speed = (0.02 + (multiplier * 0.008) + (level * 0.005)) * (-1 if multiplier >= 4 else 1)
         sides = 8 if level < 3 else (6 if level < 5 else 10)
-
-        # Ramped up tunnel speed factoring in both stage progression and stress multiplier
         tunnel_speed = 8.5 + (level * 0.6) + (multiplier * 1.5)
 
         for i in range(45):
             radius = ((frame_count * tunnel_speed + i * 14) % max_radius) + 2 + pulse
             if radius <= 0: continue
             color = active_palette[(i + (frame_count // 5)) % len(active_palette)]
-            
             points = []
             for j in range(sides):
                 angle = (frame_count * spin_speed) + (j * (2 * math.pi / sides))
@@ -609,7 +568,6 @@ while running:
                 radius = ((frame_count * (tunnel_speed * 0.7) + i * 25) % max_radius) + 10
                 sq_spin = -spin_speed * 1.5
                 color = active_palette[(i + 2) % len(active_palette)]
-                
                 pts = []
                 for j in range(4):
                     angle = (frame_count * sq_spin) + (j * (math.pi / 2) + math.pi/4)
@@ -634,15 +592,12 @@ while running:
             p["dist"] += p["speed"] * dt
             px_p = cx + math.cos(p["angle"]) * p["dist"]
             py_p = cy + math.sin(p["angle"]) * p["dist"]
-            
             if p["type"] == 'F': p_color = MAGENTA
             elif p["type"] == 'S': p_color = CYAN
             elif p["type"] == 'H': p_color = GREEN
             else: p_color = AMBER
-                
             if (frame_count // 10) % 2 == 0:
                 draw_text(canvas, p["type"], int(px_p - 6), int(py_p - 6), p_color, FONT_MD)
-
             angle_diff_p = (player_angle - p["angle"] + math.pi) % (2 * math.pi) - math.pi
             if abs(p["dist"] - player_distance) < 20 and abs(angle_diff_p) < 0.35:
                 if p["type"] == 'F': lives = 9
@@ -651,14 +606,12 @@ while running:
                 elif p["type"] == 'R': rapid_fire_timer = 300 
                 CHAN_SFX.play(SND_POWERUP)
                 powerups.remove(p)
-            elif p["dist"] > 400:
-                powerups.remove(p)
+            elif p["dist"] > 400: powerups.remove(p)
 
         for obs in obstacles[:]:
             obs["dist"] += obs["speed"] * dt * camping_penalty
             ox, oy = cx + math.cos(obs["angle"]) * obs["dist"], cy + math.sin(obs["angle"]) * obs["dist"]
             obs_color = active_palette[(frame_count // 4) % len(active_palette)]
-            
             poly_pts = []
             size = 8 + (obs["dist"] * 0.045)
             rot = frame_count * 0.12
@@ -675,10 +628,7 @@ while running:
                     if score > high_score: high_score = score
                     multiplier_streak += 1
                     level_kills += 1
-
-                    if random.random() < 0.25:
-                        spawn_powerup(obs["angle"], obs["dist"])
-
+                    if random.random() < 0.25: spawn_powerup(obs["angle"], obs["dist"])
                     if level_kills >= 15:
                         level += 1
                         level_kills = 0
@@ -686,10 +636,7 @@ while running:
                         shotgun_active = False 
                         CHAN_MUSIC.play(SND_STAGE_CLEAR)
                         current_state = STATE_TRANSITION
-
-                    if multiplier_streak % 4 == 0 and multiplier < 8:
-                        multiplier += 1
-                    
+                    if multiplier_streak % 4 == 0 and multiplier < 8: multiplier += 1
                     shake_intensity, strobe_flash = 7, True
                     CHAN_SFX.play(SND_HIT)
                     if obs in obstacles: obstacles.remove(obs)
@@ -707,8 +654,7 @@ while running:
                     gameover_timer = 150
                     current_state = STATE_GAMEOVER
 
-            if obs["dist"] > 400 and obs in obstacles:
-                obstacles.remove(obs)
+            if obs["dist"] > 400 and obs in obstacles: obstacles.remove(obs)
 
         px, py = cx + math.cos(player_angle) * player_distance, cy + math.sin(player_angle) * player_distance
         if invincible_timer <= 0 or (int(invincible_timer) // 6) % 2 == 0:
@@ -718,7 +664,6 @@ while running:
             p3 = (px + math.cos(fa - 2.4) * 10, py + math.sin(fa - 2.4) * 10)
             pygame.draw.polygon(canvas, CYAN, [p1, p2, p3], width=2)
 
-        # Dynamic subliminals scaling frequency and duration with stress/multiplier
         subliminal_interval = max(30, 180 - (multiplier * 20))
         subliminal_duration = min(45, 20 + (multiplier * 3))
 
@@ -736,10 +681,8 @@ while running:
         stress_color = RED_TEXT if (multiplier >= 4 and (frame_count // 12) % 2 == 0) else GREEN
         draw_text(canvas, f"STRESS: {multiplier}X", 20, 75, stress_color, FONT_MD)
         
-        if rapid_fire_timer > 0:
-            draw_text(canvas, "RAPID FIRE", 20, 100, AMBER, FONT_SM)
-        if shotgun_active:
-            draw_text(canvas, "SPREAD SHOT", 20, 118, CYAN, FONT_SM)
+        if rapid_fire_timer > 0: draw_text(canvas, "RAPID FIRE", 20, 100, AMBER, FONT_SM)
+        if shotgun_active: draw_text(canvas, "SPREAD SHOT", 20, 118, CYAN, FONT_SM)
 
         for i in range(min(lives, 12)):
             pygame.draw.circle(canvas, RED_TEXT, (WIDTH - 30 - (i * 15), 25), 5)
@@ -750,40 +693,29 @@ while running:
         draw_text(canvas, "MISSION TERMINATED", WIDTH // 2, 120, RED_TEXT, FONT_XL, center=True)
         draw_text(canvas, f"FINAL SCORE: {score:06d}", WIDTH // 2, 200, AMBER, FONT_LG, center=True)
         draw_text(canvas, f"HIGH SCORE:  {high_score:06d}", WIDTH // 2, 235, WHITE, FONT_LG, center=True)
-        
         if (frame_count // 30) % 2 == 0:
             draw_text(canvas, "PRESS ENTER TO CONTINUE", WIDTH // 2, 320, BLUE_TEXT, FONT_MD, center=True)
-
         if gameover_timer <= 0:
-            if check_high_score(score):
-                current_state = STATE_ENTER_NAME
-            else:
-                current_state = STATE_MAIN_MENU
-                menu_selection = 0
+            if check_high_score(score): current_state = STATE_ENTER_NAME
+            else: current_state = STATE_MAIN_MENU; menu_selection = 0
 
     elif current_state == STATE_ENTER_NAME:
         canvas.fill(BLACK)
         draw_text(canvas, "NEW HIGH SCORE!", WIDTH // 2, 80, AMBER, FONT_XL, center=True)
         draw_text(canvas, "ENTER YOUR INITIALS", WIDTH // 2, 150, WHITE, FONT_MD, center=True)
-
         start_x = WIDTH // 2 - 60
         for i, char in enumerate(player_name_chars):
             box_color = GREEN if i == name_cursor_idx else WHITE
             pygame.draw.rect(canvas, box_color, (start_x + (i * 45), 210, 36, 45), 2)
             draw_text(canvas, char, start_x + (i * 45) + 12, 218, box_color, FONT_LG)
-
         if (frame_count // 30) % 2 == 0:
             draw_text(canvas, "USE ARROWS & ENTER TO SUBMIT", WIDTH // 2, 320, CYAN, FONT_SM, center=True)
 
-    # Correct aspect ratio scaling with letterboxing/pillarboxing
     SCREEN.fill(BLACK)
     win_w, win_h = SCREEN.get_size()
-    
     scale = min(win_w / WIDTH, win_h / HEIGHT)
-    scaled_w = int(WIDTH * scale)
-    scaled_h = int(HEIGHT * scale)
-    offset_x = (win_w - scaled_w) // 2
-    offset_y = (win_h - scaled_h) // 2
+    scaled_w, scaled_h = int(WIDTH * scale), int(HEIGHT * scale)
+    offset_x, offset_y = (win_w - scaled_w) // 2, (win_h - scaled_h) // 2
 
     rx = random.randint(-int(shake_intensity), int(shake_intensity)) if shake_intensity > 0 else 0
     ry = random.randint(-int(shake_intensity), int(shake_intensity)) if shake_intensity > 0 else 0
@@ -797,14 +729,10 @@ while running:
 
     scaled_surf = pygame.transform.smoothscale(processed_canvas, (scaled_w, scaled_h))
     SCREEN.blit(scaled_surf, (offset_x + rx, offset_y + ry))
-
     pygame.display.flip()
 
-server_running = False
 if client_socket:
-    try:
-        client_socket.close()
-    except:
-        pass
+    try: client_socket.close()
+    except: pass
 pygame.quit()
 sys.exit()
