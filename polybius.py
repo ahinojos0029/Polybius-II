@@ -5,32 +5,100 @@ import os
 import random
 import sys
 import time
+from pathlib import Path
 import pygame
 
-# --- DISCORD RICH PRESENCE SETUP ---
-try:
-  from pypresence import Presence
+# --- PLATFORM-SPECIFIC CONFIG & DATA DIRECTORIES ---
+APP_NAME = "PolybiusII"
 
-  CLIENT_ID = (
-      "1529672643945431090"  # Replace with your actual Discord Application ID
-  )
-  RPC = Presence(CLIENT_ID)
-  RPC.connect()
-  rpc_connected = True
-  rpc_start_time = time.time()
-except Exception:
-  rpc_connected = False
-  RPC = None
+
+def get_app_dir() -> Path:
+  """Returns standard platform-specific directory for saving configs/scores.
+
+  Windows: %APPDATA%\PolybiusII (or Documents\PolybiusII)
+  Linux:   ~/.config/PolybiusII
+  macOS:   ~/Library/Application Support/PolybiusII
+  """
+  home = Path.home()
+  if sys.platform == "win32":
+    app_data = os.getenv("APPDATA")
+    if app_data:
+      base_dir = Path(app_data)
+    else:
+      base_dir = home / "Documents"
+  elif sys.platform == "darwin":
+    base_dir = home / "Library" / "Application Support"
+  else:
+    base_dir = Path(os.getenv("XDG_CONFIG_HOME", home / ".config"))
+
+  target_dir = base_dir / APP_NAME
+  target_dir.mkdir(parents=True, exist_ok=True)
+  return target_dir
+
+
+# Paths
+SAVE_DIR = get_app_dir()
+SETTINGS_FILE = SAVE_DIR / "polybius_settings.json"
+SCORE_FILE = SAVE_DIR / "polybius_ii_scores.json"
+
+# --- SETTINGS MANAGEMENT ---
+settings = {
+    "invert_x": False,
+    "invert_y": False,
+    "master_volume": 0.8,
+    "screen_shake_enabled": True,
+    "discord_rpc_enabled": True,
+}
+
+
+def load_settings():
+  global settings
+  if SETTINGS_FILE.exists():
+    try:
+      with open(SETTINGS_FILE, "r") as f:
+        data = json.load(f)
+        if isinstance(data, dict):
+          settings.update(data)
+    except Exception:
+      pass
+
+
+def save_settings():
+  try:
+    with open(SETTINGS_FILE, "w") as f:
+      json.dump(settings, f, indent=4)
+  except Exception:
+    pass
+
+
+load_settings()
+
+# --- DISCORD RICH PRESENCE SETUP ---
+rpc_connected = False
+RPC = None
+rpc_start_time = time.time()
+
+if settings.get("discord_rpc_enabled", True):
+  try:
+    from pypresence import Presence
+
+    CLIENT_ID = "1529672643945431090"
+    RPC = Presence(CLIENT_ID)
+    RPC.connect()
+    rpc_connected = True
+  except Exception:
+    rpc_connected = False
+    RPC = None
 
 
 def update_discord_status(details_text, state_text=""):
-  if rpc_connected:
+  if rpc_connected and settings.get("discord_rpc_enabled", True):
     try:
       RPC.update(
           details=details_text,
           state=state_text if state_text else None,
           start=rpc_start_time,
-          large_image="polybius_logo",  # Upload this key in Discord Dev Portal
+          large_image="polybius_logo",
           large_text="POLYBIUS II",
       )
     except Exception:
@@ -54,7 +122,7 @@ try:
   FONT_MD = pygame.font.SysFont("Courier New", 18, bold=True)
   FONT_LG = pygame.font.SysFont("Courier New", 26, bold=True)
   FONT_XL = pygame.font.SysFont("Courier New", 36, bold=True)
-except:
+except Exception:
   FONT_SM = FONT_MD = FONT_LG = FONT_XL = None
 
 
@@ -88,19 +156,21 @@ LEVEL_PALETTES = [
 ]
 
 
-# Authentic 8-bit Sound Generators
+# Sound Generators
 def gen_square_wave(freq, duration, volume=0.2):
+  vol = volume * settings["master_volume"]
   sample_rate = 22050
   n_samples = int(sample_rate * duration)
   buf = array.array("h")
   period = sample_rate / max(1, freq)
   for i in range(n_samples):
     val = 32000 if (i % period) < (period / 2) else -32000
-    buf.append(int(val * volume * (1.0 - (i / float(n_samples)))))
+    buf.append(int(val * vol * (1.0 - (i / float(n_samples)))))
   return pygame.mixer.Sound(buf)
 
 
 def gen_laser_chirp(start_freq=900, end_freq=200, duration=0.08, volume=0.25):
+  vol = volume * settings["master_volume"]
   sample_rate = 22050
   n_samples = int(sample_rate * duration)
   buf = array.array("h")
@@ -110,21 +180,23 @@ def gen_laser_chirp(start_freq=900, end_freq=200, duration=0.08, volume=0.25):
     curr_freq = start_freq + (end_freq - start_freq) * t
     phase += curr_freq / sample_rate
     val = 32000 if (phase % 1.0) < 0.5 else -32000
-    buf.append(int(val * volume * (1.0 - t)))
+    buf.append(int(val * vol * (1.0 - t)))
   return pygame.mixer.Sound(buf)
 
 
 def gen_8bit_noise_explosion(duration=0.3, volume=0.35):
+  vol = volume * settings["master_volume"]
   sample_rate = 22050
   n_samples = int(sample_rate * duration)
   buf = array.array("h")
   for i in range(n_samples):
     decay = (1.0 - (i / float(n_samples))) ** 2
-    buf.append(int(random.choice([28000, -28000]) * volume * decay))
+    buf.append(int(random.choice([28000, -28000]) * vol * decay))
   return pygame.mixer.Sound(buf)
 
 
 def gen_stage_clear_jingle(volume=0.3):
+  vol = volume * settings["master_volume"]
   sample_rate = 22050
   duration = 0.6
   n_samples = int(sample_rate * duration)
@@ -136,11 +208,12 @@ def gen_stage_clear_jingle(volume=0.3):
     period = sample_rate / max(1, freq)
     val = 32000 if (i % period) < (period / 2) else -32000
     decay = 1.0 - (i / float(n_samples))
-    buf.append(int(val * volume * decay))
+    buf.append(int(val * vol * decay))
   return pygame.mixer.Sound(buf)
 
 
 def gen_powerup_sound(volume=0.25):
+  vol = volume * settings["master_volume"]
   sample_rate = 22050
   duration = 0.25
   n_samples = int(sample_rate * duration)
@@ -150,7 +223,7 @@ def gen_powerup_sound(volume=0.25):
     period = sample_rate / max(1, freq)
     val = 32000 if (i % period) < (period / 2) else -32000
     decay = 1.0 - (i / float(n_samples))
-    buf.append(int(val * volume * decay))
+    buf.append(int(val * vol * decay))
   return pygame.mixer.Sound(buf)
 
 
@@ -165,8 +238,6 @@ CHAN_EXPLODE = pygame.mixer.Channel(1)
 CHAN_HUM = pygame.mixer.Channel(2)
 CHAN_MUSIC = pygame.mixer.Channel(3)
 
-SCORE_FILE = "polybius_ii_scores.json"
-
 
 def load_leaderboard():
   default_board = [
@@ -176,13 +247,13 @@ def load_leaderboard():
       ["SYN", 5000],
       ["SYS", 2500],
   ]
-  if os.path.exists(SCORE_FILE):
+  if SCORE_FILE.exists():
     try:
       with open(SCORE_FILE, "r") as f:
         data = json.load(f)
         if isinstance(data, list) and len(data) > 0:
           return data
-    except:
+    except Exception:
       pass
   return default_board
 
@@ -190,8 +261,8 @@ def load_leaderboard():
 def save_leaderboard(board):
   try:
     with open(SCORE_FILE, "w") as f:
-      json.dump(board, f)
-  except:
+      json.dump(board, f, indent=4)
+  except Exception:
     pass
 
 
@@ -208,6 +279,7 @@ STATE_ENTER_NAME = 7
 current_state = STATE_WARNING
 
 menu_selection = 0
+options_selection = 0
 campaign_level_selected = 1
 options_overdrive = False
 secret_typed_buffer = ""
@@ -330,7 +402,7 @@ while running:
 
   frame_count += 1
 
-  # Update Discord RPC periodic sync (every 60 frames ~ 1 second)
+  # Update Discord RPC
   if frame_count % 60 == 0:
     if current_state in (
         STATE_WARNING,
@@ -352,10 +424,8 @@ while running:
       running = False
     elif event.type == pygame.KEYDOWN:
       if event.key == pygame.K_ESCAPE:
-        if current_state == STATE_PLAYING:
-          current_state = STATE_MAIN_MENU
-          menu_selection = 0
-        elif current_state in (
+        if current_state in (
+            STATE_PLAYING,
             STATE_CAMPAIGN_MENU,
             STATE_OPTIONS,
             STATE_LEADERBOARD,
@@ -396,12 +466,45 @@ while running:
           current_state = STATE_TRANSITION
 
       elif current_state == STATE_OPTIONS:
-        if event.key == pygame.K_l:
-          current_state = STATE_LEADERBOARD
-        elif overdrive_unlocked and (
-            event.key == pygame.K_UP or event.key == pygame.K_DOWN
+        options_count = 6 if overdrive_unlocked else 5
+        if event.key == pygame.K_UP:
+          options_selection = (options_selection - 1) % options_count
+        elif event.key == pygame.K_DOWN:
+          options_selection = (options_selection + 1) % options_count
+        elif event.key in (
+            pygame.K_LEFT,
+            pygame.K_RIGHT,
+            pygame.K_RETURN,
+            pygame.K_SPACE,
         ):
-          options_overdrive = not options_overdrive
+          if options_selection == 0:
+            settings["invert_x"] = not settings["invert_x"]
+          elif options_selection == 1:
+            settings["invert_y"] = not settings["invert_y"]
+          elif options_selection == 2:
+            if event.key == pygame.K_LEFT:
+              settings["master_volume"] = max(
+                  0.0, round(settings["master_volume"] - 0.1, 1)
+              )
+            else:
+              settings["master_volume"] = min(
+                  1.0, round(settings["master_volume"] + 0.1, 1)
+              )
+          elif options_selection == 3:
+            settings["screen_shake_enabled"] = not settings[
+                "screen_shake_enabled"
+            ]
+          elif options_selection == 4:
+            settings["discord_rpc_enabled"] = not settings[
+                "discord_rpc_enabled"
+            ]
+            if not settings["discord_rpc_enabled"] and rpc_connected:
+              RPC.clear()
+          elif options_selection == 5 and overdrive_unlocked:
+            options_overdrive = not options_overdrive
+          save_settings()
+        elif event.key == pygame.K_l:
+          current_state = STATE_LEADERBOARD
         elif not overdrive_unlocked and event.unicode.isalpha():
           secret_typed_buffer += event.unicode.lower()
           if "sinnes" in secret_typed_buffer:
@@ -409,7 +512,7 @@ while running:
             secret_typed_buffer = ""
 
       elif current_state == STATE_LEADERBOARD:
-        if event.key in (pygame.K_RETURN, pygame.K_SPACE):
+        if event.key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_ESCAPE):
           current_state = STATE_OPTIONS
 
       elif current_state == STATE_PLAYING:
@@ -582,52 +685,56 @@ while running:
   elif current_state == STATE_OPTIONS:
     canvas.fill(BLACK)
     draw_text(
-        canvas, "OPTIONS & SETTINGS", WIDTH // 2, 80, AMBER, FONT_LG, center=True
+        canvas, "SYSTEM CONFIGURATION", WIDTH // 2, 40, AMBER, FONT_LG, center=True
     )
+
+    opts = [
+        ("INVERT HORIZONTAL (X)", "ON" if settings["invert_x"] else "OFF"),
+        ("INVERT VERTICAL (Y)", "ON" if settings["invert_y"] else "OFF"),
+        (
+            "STRESS VOLUME",
+            f"{int(settings['master_volume'] * 100)}%"
+            if settings["master_volume"] > 0
+            else "MUTED",
+        ),
+        (
+            "SCREEN SHAKE",
+            "ENABLED" if settings["screen_shake_enabled"] else "DISABLED",
+        ),
+        (
+            "DISCORD RICH PRESENCE",
+            "ENABLED" if settings["discord_rpc_enabled"] else "DISABLED",
+        ),
+    ]
+
     if overdrive_unlocked:
-      od_status = "ENABLED" if options_overdrive else "DISABLED"
-      od_color = GREEN if options_overdrive else WHITE
-      draw_text(
-          canvas,
-          f"OVERDRIVE MODE: {od_status}",
-          WIDTH // 2 - 160,
-          180,
-          od_color,
-          FONT_MD,
+      opts.append(
+          ("OVERDRIVE MODE", "ENABLED" if options_overdrive else "DISABLED")
       )
+
+    for idx, (label, val) in enumerate(opts):
+      color = GREEN if idx == options_selection else WHITE
+      prefix = "> " if idx == options_selection else "  "
+      draw_text(
+          canvas, f"{prefix}{label}: {val}", 80, 110 + (idx * 38), color, FONT_MD
+      )
+
+    if not overdrive_unlocked:
       draw_text(
           canvas,
-          "PRESS UP/DOWN TO TOGGLE OVERDRIVE",
+          "TYPE SECRET PASSWORD FOR OVERDRIVE",
           WIDTH // 2,
-          240,
+          360,
           CYAN,
           FONT_SM,
           center=True,
       )
-    else:
-      draw_text(
-          canvas,
-          "TYPE THE SECRET PASSWORD TO UNLOCK MODIFIERS",
-          WIDTH // 2,
-          180,
-          WHITE,
-          FONT_SM,
-          center=True,
-      )
+
     draw_text(
         canvas,
-        "PRESS L TO VIEW LEADERBOARDS",
+        "ARROWS: NAVIGATE/ADJUST | L: LEADERBOARDS | ESC: SAVE & RETURN",
         WIDTH // 2,
-        300,
-        MAGENTA,
-        FONT_MD,
-        center=True,
-    )
-    draw_text(
-        canvas,
-        "PRESS ESC TO RETURN TO MENU",
-        WIDTH // 2,
-        380,
+        430,
         WHITE,
         FONT_SM,
         center=True,
@@ -712,32 +819,37 @@ while running:
       CHAN_HUM.play(dynamic_hum)
 
     keys = pygame.key.get_pressed()
-    is_static = not (
-        keys[pygame.K_LEFT]
-        or keys[pygame.K_a]
-        or keys[pygame.K_RIGHT]
-        or keys[pygame.K_d]
-        or keys[pygame.K_UP]
-        or keys[pygame.K_w]
-        or keys[pygame.K_DOWN]
-        or keys[pygame.K_s]
-    )
+
+    x_dir = 0
+    if keys[pygame.K_LEFT] or keys[pygame.K_a]:
+      x_dir += 1
+    if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+      x_dir -= 1
+
+    y_dir = 0
+    if keys[pygame.K_UP] or keys[pygame.K_w]:
+      y_dir -= 1
+    if keys[pygame.K_DOWN] or keys[pygame.K_s]:
+      y_dir += 1
+
+    if settings["invert_x"]:
+      x_dir *= -1
+    if settings["invert_y"]:
+      y_dir *= -1
+
+    is_static = x_dir == 0 and y_dir == 0
     camping_penalty = 1.4 if is_static else 1.0
 
-    if keys[pygame.K_LEFT] or keys[pygame.K_a]:
-      player_velocity += 0.010 * dt
-    elif keys[pygame.K_RIGHT] or keys[pygame.K_d]:
-      player_velocity -= 0.010 * dt
+    if x_dir != 0:
+      player_velocity += (x_dir * 0.010) * dt
     else:
       player_velocity *= 0.80**dt
 
     player_velocity = max(-0.12, min(0.12, player_velocity))
     player_angle += player_velocity * dt
 
-    if keys[pygame.K_UP] or keys[pygame.K_w]:
-      player_dist_velocity -= 0.350 * dt
-    elif keys[pygame.K_DOWN] or keys[pygame.K_s]:
-      player_dist_velocity += 0.350 * dt
+    if y_dir != 0:
+      player_dist_velocity += (y_dir * 0.350) * dt
     else:
       player_dist_velocity *= 0.85**dt
 
@@ -891,7 +1003,9 @@ while running:
             current_state = STATE_TRANSITION
           if multiplier_streak % 4 == 0 and multiplier < 8:
             multiplier += 1
-          shake_intensity, strobe_flash = 7, True
+          if settings["screen_shake_enabled"]:
+            shake_intensity = 7
+          strobe_flash = True
           CHAN_SFX.play(SND_HIT)
           if obs in obstacles:
             obstacles.remove(obs)
@@ -909,7 +1023,9 @@ while running:
       ):
         lives -= 1
         multiplier, multiplier_streak = 1, 0
-        invincible_timer, shake_intensity = 60, 20
+        invincible_timer = 60
+        if settings["screen_shake_enabled"]:
+          shake_intensity = 20
         CHAN_EXPLODE.play(SND_EXPLODE)
         if obs in obstacles:
           obstacles.remove(obs)
@@ -1051,12 +1167,12 @@ while running:
 
   rx = (
       random.randint(-int(shake_intensity), int(shake_intensity))
-      if shake_intensity > 0
+      if (shake_intensity > 0 and settings["screen_shake_enabled"])
       else 0
   )
   ry = (
       random.randint(-int(shake_intensity), int(shake_intensity))
-      if shake_intensity > 0
+      if (shake_intensity > 0 and settings["screen_shake_enabled"])
       else 0
   )
   if shake_intensity > 0:
