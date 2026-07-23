@@ -54,7 +54,7 @@ jobs:
             --windows-icon-from-ico=icon.ico `
             --assume-yes-for-downloads `
             --output-dir=dist `
-            main.py
+            polybius.py
 
       # Linux Build
       - name: Build Executable (Linux)
@@ -65,7 +65,7 @@ jobs:
             --linux-icon=icon.ico \
             --assume-yes-for-downloads \
             --output-dir=dist \
-            main.py
+            polybius.py
 
       # macOS Build
       - name: Build Executable (macOS)
@@ -77,14 +77,14 @@ jobs:
             --macos-app-icon=icon.ico \
             --assume-yes-for-downloads \
             --output-dir=dist \
-            main.py
+            polybius.py
 
       # Windows Archive (Zipping the whole main.dist folder properly)
       - name: Compress Build (Windows)
         if: runner.os == 'Windows'
         shell: powershell
         run: |
-          Compress-Archive -Path dist/main.dist -DestinationPath POLYBIUS-Windows.zip
+          Compress-Archive -Path dist/main.dist/ -DestinationPath POLYBIUS-Windows.zip
 
       # Linux Archive
       - name: Compress Build (Linux)
@@ -98,7 +98,7 @@ jobs:
       - name: Compress Build (macOS)
         if: runner.os == 'macos'
         run: |
-          cd dist && zip -r ../POLYBIUS-macOS.zip main.app
+          cd dist/ && zip -r ../POLYBIUS-macOS.zip main.app
 
       - name: Upload Assets to GitHub Release
         uses: softprops/action-gh-release@v2
